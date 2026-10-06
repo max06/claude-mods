@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Command Watch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one column of command cards, newest first, under a slim sticky bar with filters. */
+:root {
+  --bg: #f3f5f4;
+  --surface: #ffffff;
+  --code-bg: #eef1f0;
+  --fg: #1c2421;
+  --muted: #5d6b66;
+  --line: #d6dddb;
+  --accent: #0f766e;
+  --run: #0f766e;
+  --ok: #3f7d3a;
+  --bad: #b42318;
+  --warn: #a15c07;
+  --font-body: "Atkinson Hyperlegible", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --code-line: 1.45em;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111615; --surface: #182020; --code-bg: #0c1110; --fg: #e3ebe8; --muted: #93a39e;
+    --line: #2a3533; --accent: #4fd1c0; --run: #4fd1c0; --ok: #7cc474; --bad: #ff7a6b; --warn: #f0b04a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111615; --surface: #182020; --code-bg: #0c1110; --fg: #e3ebe8; --muted: #93a39e;
+  --line: #2a3533; --accent: #4fd1c0; --run: #4fd1c0; --ok: #7cc474; --bad: #ff7a6b; --warn: #f0b04a;
+  color-scheme: dark;
+}
+html { color-scheme: light; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; }
+.wrap { max-width: 980px; margin: 0 auto; padding-inline: 16px; padding-block: 0 48px; }
+header {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 2;
+  background: var(--bg); border-bottom: 1px solid var(--line);
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding-block: 12px;
+}
+h1 { font-size: 18px; margin: 0; letter-spacing: .01em; }
+.live { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+.live.on .dot { background: var(--ok); }
+.filters { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+.chip {
+  font: inherit; font-size: 13px; padding: 4px 10px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface); color: var(--fg);
+}
+.chip[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.chip:focus-visible, button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+select { font: inherit; font-size: 13px; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); max-width: 100%; }
+#list { display: grid; gap: 14px; margin-top: 16px; }
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+  padding: 12px 14px; display: grid; gap: 8px; min-width: 0;
+  border-left: 3px solid var(--line);
+}
+.card.running { border-left-color: var(--run); }
+.card.failed { border-left-color: var(--bad); }
+.card.done { border-left-color: var(--ok); }
+.card.interrupted { border-left-color: var(--warn); }
+.top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; min-width: 0; }
+.what { font-weight: 700; flex: 1 1 260px; min-width: 0; overflow-wrap: anywhere; }
+.pill { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 2px 8px; border-radius: 4px; border: 1px solid currentColor; white-space: nowrap; }
+.pill.running { color: var(--run); }
+.pill.done { color: var(--ok); }
+.pill.failed { color: var(--bad); }
+.pill.interrupted { color: var(--warn); }
+.card.running .pill::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: currentColor; margin-right: 6px; vertical-align: 1px; animation: blink 1.2s ease-in-out infinite; }
+@keyframes blink { 50% { opacity: .2; } }
+@media (prefers-reduced-motion: reduce) { .card.running .pill::before { animation: none; } }
+.meta { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.meta b { color: var(--fg); font-weight: 400; }
+.meta .warn { color: var(--warn); }
+.block { position: relative; min-width: 0; }
+.label { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 3px; }
+pre {
+  margin: 0; font-family: var(--font-mono); font-size: 12.5px; line-height: var(--code-line);
+  background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px;
+  padding: 8px 10px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere;
+}
+pre.cmd.clamped { max-height: calc(var(--code-line) * 5 + 16px); overflow: hidden; }
+pre.out { max-height: calc(var(--code-line) * 12 + 16px); white-space: pre; overflow-wrap: normal; }
+pre.out.open { max-height: 70vh; }
+pre.out:empty::before { content: "No output yet"; color: var(--muted); }
+.more { font: inherit; font-size: 12px; color: var(--accent); background: none; border: 0; padding: 2px 0; cursor: pointer; }
+.empty { border: 1px dashed var(--line); border-radius: 8px; padding: 20px; color: var(--muted); line-height: 1.5; }
+[hidden] { display: none !important; }
+.empty code { font-family: var(--font-mono); font-size: 13px; color: var(--fg); }
+.foot { display: flex; justify-content: flex-end; margin-top: 16px; gap: 10px; align-items: center; font-size: 13px; color: var(--muted); }
+.foot button { font: inherit; font-size: 13px; padding: 5px 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); cursor: pointer; }
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+  <header>
+    <h1>Command Watch</h1>
+    <span class="live" id="live"><span class="dot"></span><span id="liveText">Connecting</span></span>
+    <div class="filters" role="group" aria-label="Filter commands">
+      <button class="chip" id="f-all" aria-pressed="true" data-f="all">All</button>
+      <button class="chip" id="f-running" aria-pressed="false" data-f="running">Running</button>
+      <button class="chip" id="f-failed" aria-pressed="false" data-f="failed">Failed</button>
+      <select id="session" aria-label="Session"><option value="">All sessions</option></select>
+    </div>
+  </header>
+
+  <div id="list">
+    <div class="empty" id="empty">
+      Each shell command a Claude Code session runs on your device shows up here as a card, with its output updating every few seconds.
+      Nothing has arrived yet. The <code>thread-pulse</code> mod writes a card for each command once it is installed.
+    </div>
+  </div>
+
+  <div class="foot">
+    <span id="count"></span>
+    <button id="clear" type="button" hidden>Remove finished commands</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  const STALE_MS = 45_000;
+  const list = document.getElementById('list');
+  const empty = document.getElementById('empty');
+  const liveEl = document.getElementById('live');
+  const liveText = document.getElementById('liveText');
+  const sessionSel = document.getElementById('session');
+  const clearBtn = document.getElementById('clear');
+  const countEl = document.getElementById('count');
+
+  let calls = [];
+  let filter = 'all';
+  const open = { cmd: new Set(), out: new Set() };
+  const cards = new Map();
+  let db = null;
+
+  const fmtDur = ms => {
+    const s = Math.max(0, Math.floor(ms / 1000));
+    if (s < 60) return s + 's';
+    const m = Math.floor(s / 60);
+    if (m < 60) return m + 'm ' + String(s % 60).padStart(2, '0') + 's';
+    return Math.floor(m / 60) + 'h ' + String(m % 60).padStart(2, '0') + 'm';
+  };
+  const fmtTime = ms => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const statusText = c =>
+    c.status === 'running' ? 'Running' :
+    c.status === 'failed' ? (c.exitCode != null ? 'Exit ' + c.exitCode : 'Failed') :
+    c.status === 'interrupted' ? 'Interrupted' : 'Done';
+
+  function el(tag, cls, text) {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text != null) n.textContent = text;
+    return n;
+  }
+
+  function build(id) {
+    const card = el('article', 'card');
+    const top = el('div', 'top');
+    const pill = el('span', 'pill');
+    const what = el('span', 'what');
+    top.append(pill, what);
+    const meta = el('div', 'meta');
+    const cmdBlock = el('div', 'block');
+    cmdBlock.append(el('div', 'label', 'Command'));
+    const cmd = el('pre', 'cmd');
+    const cmdMore = el('button', 'more');
+    cmdMore.type = 'button';
+    cmdMore.addEventListener('click', () => {
+      open.cmd.has(id) ? open.cmd.delete(id) : open.cmd.add(id);
+      render();
+    });
+    cmdBlock.append(cmd, cmdMore);
+    const outBlock = el('div', 'block');
+    outBlock.append(el('div', 'label', 'Output'));
+    const out = el('pre', 'out');
+    const outMore = el('button', 'more');
+    outMore.type = 'button';
+    outMore.addEventListener('click', () => {
+      open.out.has(id) ? open.out.delete(id) : open.out.add(id);
+      render();
+    });
+    outBlock.append(out, outMore);
+    card.append(top, meta, cmdBlock, outBlock);
+    return { card, pill, what, meta, cmd, cmdMore, out, outMore, lastOut: null };
+  }
+
+  function metaItem(label, value, cls) {
+    const s = el('span', cls);
+    s.append(label + ' ', el('b', null, value));
+    return s;
+  }
+
+  function fill(ui, c, now) {
+    const status = c.status || 'running';
+    ui.card.className = 'card ' + status;
+    ui.pill.className = 'pill ' + status;
+    ui.pill.textContent = statusText(c);
+    ui.what.textContent = c.description || (c.command || '').split('\n')[0];
+
+    const end = c.endedAt || now;
+    const items = [metaItem(status === 'running' ? 'Running for' : 'Took', fmtDur(end - c.startedAt))];
+    if (c.timeoutMs) {
+      const left = c.startedAt + c.timeoutMs - now;
+      items.push(metaItem('Timeout', fmtDur(c.timeoutMs) + (status === 'running' && left > 0 ? ' (' + fmtDur(left) + ' left)' : '')));
+    }
+    if (c.background) items.push(metaItem('Mode', 'background'));
+    items.push(metaItem('Started', fmtTime(c.startedAt)));
+    if (c.sessionLabel) items.push(metaItem('Session', c.sessionLabel));
+    if (status === 'running') {
+      const quiet = now - (c.lastOutputAt || c.startedAt);
+      if (quiet > 60_000) items.push(metaItem('No new output for', fmtDur(quiet), 'warn'));
+      if (now - (c.updatedAt || c.startedAt) > STALE_MS) items.push(metaItem('Session silent for', fmtDur(now - c.updatedAt), 'warn'));
+    }
+    ui.meta.replaceChildren(...items);
+
+    const cmdText = c.command || '';
+    const lines = cmdText.split('\n').length;
+    if (ui.cmd.textContent !== cmdText) ui.cmd.textContent = cmdText;
+    const cmdOpen = open.cmd.has(c.id);
+    ui.cmd.classList.toggle('clamped', !cmdOpen && lines > 5);
+    ui.cmdMore.hidden = lines <= 5;
+    ui.cmdMore.textContent = cmdOpen ? 'Show less' : 'Show all ' + lines + ' lines';
+
+    const outText = (c.outputTruncated ? '… earlier output cut …\n' : '') + (c.output || '');
+    if (ui.lastOut !== outText) {
+      const atBottom = ui.out.scrollHeight - ui.out.scrollTop - ui.out.clientHeight < 24;
+      ui.out.textContent = c.output ? outText : '';
+      ui.lastOut = outText;
+      ui.stick = atBottom || status === 'running';
+    }
+    const outOpen = open.out.has(c.id);
+    ui.out.classList.toggle('open', outOpen);
+    const outLines = (c.output || '').split('\n').length;
+    ui.outMore.hidden = outLines <= 12;
+    ui.outMore.textContent = outOpen ? 'Show less' : 'Expand output';
+  }
+
+  function render() {
+    const now = Date.now();
+    const sess = sessionSel.value;
+    const shown = calls.filter(c =>
+      (!sess || c.session === sess) &&
+      (filter === 'all' || (filter === 'running' ? c.status === 'running' : (c.status === 'failed' || c.status === 'interrupted'))));
+    const keep = new Set();
+    const nodes = [];
+    for (const c of shown) {
+      let ui = cards.get(c.id);
+      if (!ui) { ui = build(c.id); cards.set(c.id, ui); }
+      fill(ui, c, now);
+      keep.add(c.id);
+      nodes.push(ui.card);
+    }
+    for (const id of [...cards.keys()]) if (!calls.some(c => c.id === id)) cards.delete(id);
+    empty.hidden = calls.length > 0;
+    const want = calls.length ? nodes : [empty];
+    const same = want.length === list.children.length && want.every((n, i) => list.children[i] === n);
+    // Moving a box resets its scroll, so only rebuild when the order changed.
+    if (!same) {
+      list.replaceChildren(...want);
+      for (const ui of cards.values()) if (ui.card.classList.contains('running')) ui.stick = true;
+    }
+    // Scroll after the cards are in the page: a detached box has no height.
+    for (const ui of cards.values()) if (ui.stick) { ui.out.scrollTop = ui.out.scrollHeight; ui.stick = false; }
+    if (calls.length && !nodes.length) list.append(el('div', 'empty', 'No command matches this filter.'));
+    const running = calls.filter(c => c.status === 'running').length;
+    countEl.textContent = calls.length ? calls.length + ' commands, ' + running + ' running' : '';
+    clearBtn.hidden = !db || calls.every(c => c.status === 'running');
+  }
+
+  function syncSessions() {
+    const seen = new Map();
+    for (const c of calls) if (c.session && !seen.has(c.session)) seen.set(c.session, c.sessionLabel || c.session.slice(0, 12));
+    const cur = sessionSel.value;
+    const opts = [new Option('All sessions', '')];
+    for (const [id, label] of seen) opts.push(new Option(label, id));
+    sessionSel.replaceChildren(...opts);
+    sessionSel.value = seen.has(cur) ? cur : '';
+  }
+
+  document.querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => {
+    filter = b.dataset.f;
+    document.querySelectorAll('.chip').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    render();
+  }));
+  sessionSel.addEventListener('change', render);
+
+  clearBtn.addEventListener('click', async () => {
+    clearBtn.disabled = true;
+    try { await fetch('clear', { method: 'POST' }); await poll(); } catch (e) { /* server gone: next poll says so */ }
+    clearBtn.disabled = false;
+  });
+
+  setInterval(() => { if (calls.some(c => c.status === 'running')) render(); }, 1000);
+
+  db = true;
+  async function poll() {
+    try {
+      const res = await fetch('calls.json', { cache: 'no-store' });
+      if (!res.ok) throw new Error(res.status);
+      calls = await res.json();
+      liveEl.classList.add('on');
+      liveText.textContent = 'Live';
+      syncSessions();
+      render();
+    } catch (e) {
+      liveEl.classList.remove('on');
+      liveText.textContent = 'Server not reachable. Is command-watch-server.py running?';
+    }
+  }
+  poll();
+  setInterval(poll, 1500);
+})();
+</script>
+
+</body>
+</html>

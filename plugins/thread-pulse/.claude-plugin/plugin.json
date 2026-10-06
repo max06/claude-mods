@@ -1,0 +1,51 @@
+{
+  "name": "thread-pulse",
+  "version": "0.3.0",
+  "description": "Makes running tool calls visible: live cards for every shell command with output as it runs (Command Watch), a status line for long calls, and a live line in Claude project thread checklists.",
+  "userConfig": {
+    "thresholdSeconds": {
+      "type": "number",
+      "title": "Show a call after (seconds)",
+      "description": "A tool call that runs longer than this is shown as still running.",
+      "default": 60
+    },
+    "warnMinutes": {
+      "type": "number",
+      "title": "Warn after (minutes)",
+      "description": "A tool call that runs longer than this is marked as possibly stuck.",
+      "default": 10
+    },
+    "localWatch": {
+      "type": "boolean",
+      "title": "Local Command Watch",
+      "description": "Write each shell command and its live output to ~/.claude/command-watch for the Command Watch page.",
+      "default": true
+    },
+    "serveWatch": {
+      "type": "boolean",
+      "title": "Serve the Command Watch page",
+      "description": "Start the page server (python3, 127.0.0.1 only) from the first session that finds the port free.",
+      "default": true
+    },
+    "watchPort": {
+      "type": "number",
+      "title": "Command Watch port",
+      "description": "Port of the Command Watch page on 127.0.0.1.",
+      "default": 8765
+    }
+  },
+  "author": {
+    "name": "max06",
+    "url": "https://github.com/max06"
+  },
+  "homepage": "https://github.com/max06/claude-mods/tree/main/plugins/thread-pulse",
+  "repository": "https://github.com/max06/claude-mods",
+  "license": "MIT",
+  "keywords": [
+    "mod",
+    "bash",
+    "monitoring",
+    "visibility",
+    "command-watch"
+  ]
+}
